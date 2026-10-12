@@ -175,6 +175,10 @@ export interface KnowledgeGraphConfig {
 export interface HarnessConfig {
   /** Has the user completed the first-run onboarding? */
   onboardingComplete: boolean;
+  /** Local fork: disable manager model calls until coordinated work is requested. */
+  managerAutostart?: boolean;
+  /** Local coding-office launcher: registered independent roots and trusted helper. */
+  codingOffice?: { FE: string; BE: string; worker: string };
   /** Self-identified audience picked on the first onboarding screen. Drives the
    *  copy register everywhere onboarding explains itself: 'technical' shows CLI /
    *  flag lingo, 'non-technical' explains each concept in plain language. Unset =

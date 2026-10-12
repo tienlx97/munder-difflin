@@ -56,6 +56,10 @@ export interface KnowledgeGraphConfig {
 
 export interface HarnessConfig {
   onboardingComplete: boolean;
+  /** Local fork: disable manager model calls until coordinated work is requested. */
+  managerAutostart?: boolean;
+  /** Local coding-office launcher: registered independent roots and trusted helper. */
+  codingOffice?: { FE: string; BE: string; worker: string };
   /** Self-identified audience from the first onboarding screen ('technical' vs
    *  'non-technical') — drives the copy register across onboarding. Mirrors
    *  src/main/config.ts. */

@@ -10,6 +10,7 @@ import { join, resolve, sep, basename, dirname, isAbsolute } from 'node:path';
 import { homedir } from 'node:os';
 import { request as httpsRequest } from 'node:https';
 import { PtyManager, type SpawnOptions } from './pty';
+import { CodingOffice, type OfficeRequest } from './codingOffice';
 import { resolveCommand as resolveCliCommand, isSafeCommandName } from './shellEnv';
 import { initAutoUpdater, abortPendingRestart } from './updater';
 import { RealtimeFloorWatcher } from './realtimeFloorWatcher';
@@ -441,6 +442,7 @@ const preservedWorktrees = new Map<string, PreservedWorktree>();
  * handler or node-pty's onExit).
  */
 function teardownPty(id: string): void {
+  codingOffice.finish(id, 1, 'interrupted');
   // Ephemeral-worker flag, read BEFORE the cleanup below deletes the entry. All
   // worker deaths (done-release, idle/token reap, manual stop, crash) funnel
   // through here, so this is the one place their floor card gets archived
@@ -592,7 +594,17 @@ function removeWorkerScratch(workerId: string): void {
 // SAME pty/window (no user click). Provider-agnostic. Idempotent by construction: the
 // relaunch carries `noAutoInstall`, so the installer can never fire (let alone loop) a
 // second time — a binary that's somehow still missing just spawns and exits normally.
+const codingOffice = new CodingOffice(hive, ptyManager);
+ipcMain.handle('office:start', async (evt, request: OfficeRequest) => {
+  try {
+    const run = await codingOffice.start(request, BrowserWindow.fromWebContents(evt.sender)?.webContents ?? null);
+    if (run.status === 'running') ptyToAgent.set(run.id, run.agentId);
+    return {ok:true, run};
+  }
+  catch (e) { return {ok:false,error:String(e)}; }
+});
 ptyManager.setExitHandler((id, exitCode, info) => {
+  codingOffice.finish(id, exitCode ?? 1, info?.tail);
   // Record an ABNORMAL death before teardown — teardownPty drops the
   // pty->agent mapping, so after it runs we can no longer say WHOSE process
   // died. Only abnormal exits are recorded (recordAgentExit returns early on a
@@ -2609,6 +2621,7 @@ function spawnFailReason(error?: string): SpawnFailReason {
 }
 
 ipcMain.handle('pty:spawn', async (evt, opts: AgentSpawnOptions) => {
+  if (opts?.id?.startsWith('office-')) return {ok:false,error:'Use Coding task to start a new bounded office run; generic restart is disabled.'};
   if (!opts || typeof opts.id !== 'string' || typeof opts.cwd !== 'string' || typeof opts.command !== 'string') {
     return { ok: false, error: 'invalid SpawnOptions' };
   }
@@ -2625,6 +2638,7 @@ ipcMain.handle('pty:spawn', async (evt, opts: AgentSpawnOptions) => {
  *  no renderer `evt`). `owner` is the window that should receive this PTY's output
  *  (null → the primary window). Behavior-identical to the prior inline handler. */
 async function spawnAgentCore(opts: AgentSpawnOptions, owner: Electron.WebContents | null): Promise<{ ok: boolean; error?: string; cwd?: string; worktreePath?: string; resumeNotFound?: boolean; resumed?: boolean; seedPrompt?: string }> {
+  if (readConfig().codingOffice) return {ok:false,error:'This coding-office profile requires the bounded Coding task launcher. Unbounded native/GOD/voice spawns are disabled.'};
   // ── cwd INGESTION — expand `~` exactly once, here ───────────────────────────
   // This is the single door every agent spawn comes through (`pty:spawn` IPC and
   // the god-triggered ephemeral-worker watcher), so it is where a user-typed

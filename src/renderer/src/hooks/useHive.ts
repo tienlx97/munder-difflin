@@ -374,7 +374,7 @@ export function useHive(config: HarnessConfig | null): void {
 
   // 1) Bootstrap the god agent (source of truth = live PTYs, to dodge restarts).
   useEffect(() => {
-    if (!config?.onboardingComplete || !config.harnessHome) return;
+    if (!config?.onboardingComplete || !config.harnessHome || config.managerAutostart === false) return;
     let cancelled = false;
     useStore.getState().setGodStatus('booting');
     const t = setTimeout(async () => {
@@ -472,7 +472,7 @@ export function useHive(config: HarnessConfig | null): void {
       })();
     }, 1200);
     return () => { cancelled = true; clearTimeout(t); };
-  }, [config?.onboardingComplete, config?.harnessHome]);
+  }, [config?.onboardingComplete, config?.harnessHome, config?.managerAutostart]);
 
   // 2) Drive avatars from real hook events emitted by each agent's shim.
   useEffect(() => {
@@ -660,7 +660,7 @@ export function useHive(config: HarnessConfig | null): void {
       const now = Date.now();
       const { agents, updateAgent } = useStore.getState();
       for (const a of agents) {
-        if (!a.ptyId || a.status !== 'working') continue;
+        if (!a.ptyId || a.status !== 'working' || a.id.startsWith('office-')) continue;
         // Never fight the breaker pin (a constrained/stopped agent stays 'looping')
         // or a still-booting agent (its boot sequence is mid-type).
         const bl = breakerLevel.current[a.id];
@@ -1011,7 +1011,10 @@ export function useHive(config: HarnessConfig | null): void {
     const offSpawn = window.cth.onHiveAgentSpawned?.((rec) => {
       if (!rec?.id) return;
       // addAgent is idempotent, but bail early if the renderer already carded it.
-      if (useStore.getState().agents.some((a) => a.id === rec.id)) return;
+      if (useStore.getState().agents.some((a) => a.id === rec.id)) {
+        if(rec.id.startsWith('office-'))useStore.getState().updateAgent(rec.id,{ptyId:rec.ptyId??rec.id,provider:rec.provider as Agent['provider'],model:'unknown',cwd:rec.cwd,worktreePath:rec.cwd,command:rec.command,status:'working',action:`running ${rec.provider} task`,terminalGeneration:Date.now()});
+        return;
+      }
       // An explicit character wins; otherwise infer it from the name, which is
       // what makes "spawn one called Meredith" land on the Meredith avatar with
       // nothing else asked for. The explicit field covers what inference cannot
@@ -1039,11 +1042,11 @@ export function useHive(config: HarnessConfig | null): void {
         project,
         tmuxTarget: '',
         cwd: rec.cwd,
-        status: 'idle',
-        action: 'starting up',
+        status: rec.id.startsWith('office-') ? 'working' : 'idle',
+        action: rec.id.startsWith('office-') ? `running ${rec.provider} task` : 'starting up',
         progress: 0,
         currentStation: 'desk',
-        ptyId: rec.id,
+        ptyId: rec.ptyId ?? rec.id,
         command: rec.command,
         provider: rec.provider as Agent['provider'],
         isGod: false,
@@ -1051,10 +1054,13 @@ export function useHive(config: HarnessConfig | null): void {
       };
       useStore.getState().addAgent(agent);
     });
+    const offOffice = window.cth.onOfficeRunChanged(run => {
+      useStore.getState().updateAgent(run.agentId,{status:run.status==='done'?'success':'blocked',action:`${run.runtime}: ${run.status}`,model:run.model,note:`Tokens: ${run.tokens}; cost: ${run.cost}`});
+    });
     const offArchive = window.cth.onHiveAgentArchived?.((e) => {
       if (e?.id) useStore.getState().archiveAgent(e.id);
     });
-    return () => { offSpawn?.(); offArchive?.(); };
+    return () => { offSpawn?.(); offArchive?.(); offOffice(); };
   }, [config?.onboardingComplete]);
 
   // 5c) v0.3.4 voice bridge: main stages queue insertions (clear_context) and
@@ -1186,7 +1192,7 @@ export function useHive(config: HarnessConfig | null): void {
       reviving.current[deadId] = now; // claim BEFORE any await so re-entry can't double-spawn
       // Only respawn a PTY we actually own; never touch an unknown/healthy id.
       const a = useStore.getState().agents.find((x) => x.ptyId === deadId);
-      if (!a) return;
+      if (!a || a.id.startsWith('office-')) return;
       try {
         const cfg = await window.cth.getConfig();
         // Isolated agents run inside their worktree (a.cwd is the base repo); re-enter

@@ -32,6 +32,7 @@ import { TaskDetailOverlay } from '@/components/TaskDetailOverlay';
 import { IdePanel } from '@/ide/IdePanel';
 import { useHoldOptionToTalk } from '@/freeflow/holdOption';
 import brandLogo from '@brand/logo.png?url';
+import { CodingTaskLauncher } from '@/components/CodingTaskLauncher';
 
 // Injected at build time from package.json (see electron.vite.config.ts).
 declare const __APP_VERSION__: string;
@@ -344,6 +345,7 @@ export function App() {
         >
           {appThemeNow === 'dark' ? '☀' : '☾'}
         </button>
+        {config.codingOffice && <CodingTaskLauncher />}
         {/* v0.3.4: the IDE button moved to agent level — every agent's header
             (sidebar detail, god Command Center, fullscreen) carries it. */}
         <button

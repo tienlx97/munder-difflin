@@ -136,6 +136,7 @@ export function AgentDetailPanel({ agent }: AgentDetailPanelProps) {
       noPadding
     >
       {/* Thin header strip */}
+      {agent.id.startsWith('office-') && <div style={{padding:'6px 8px',fontSize:12,overflowWrap:'anywhere'}}>{agent.provider} · model: {agent.model ?? 'unknown'}<br/>{agent.cwd}<br/>{agent.note ?? 'Usage: unknown'}<br/>This run accepts one task. Stop it before changing instructions.</div>}
       <div ref={headerRef} style={{
         display: 'flex', alignItems: 'center', gap: 8,
         padding: '6px 8px',
@@ -231,7 +232,7 @@ export function AgentDetailPanel({ agent }: AgentDetailPanelProps) {
       )}
 
       {/* #7C — operator control (pause / halt / steer) for live agents */}
-      {isReal && <AgentControlStrip agentId={agent.id} />}
+      {isReal && !agent.id.startsWith('office-') && <AgentControlStrip agentId={agent.id} />}
 
       {/* Tabs */}
       <SidebarTabs current={sidebarTab} accent={agent.accent} onChange={setSidebarTab} />
@@ -263,7 +264,7 @@ export function AgentDetailPanel({ agent }: AgentDetailPanelProps) {
                   embedded
                 />
               </div>
-              <MessageQueueComposer agent={agent} />
+              {!agent.id.startsWith('office-') && <MessageQueueComposer agent={agent} />}
             </div>
             )
           ) : (
