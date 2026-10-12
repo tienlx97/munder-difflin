@@ -1055,7 +1055,7 @@ export function useHive(config: HarnessConfig | null): void {
       useStore.getState().addAgent(agent);
     });
     const offOffice = window.cth.onOfficeRunChanged(run => {
-      useStore.getState().updateAgent(run.agentId,{status:run.status==='done'?'success':'blocked',action:`${run.runtime}: ${run.status}`,model:run.model,note:`Requested model: ${run.requestedModel??'CLI default'}; observed: ${run.model}; tokens: ${run.tokens}; cost: ${run.cost}`});
+      useStore.getState().updateAgent(run.agentId,{status:run.status==='done'?'success':'blocked',action:`${run.runtime}: ${run.status}`,model:run.model,note:`Requested model: ${run.requestedModel??'CLI default'}; effort: ${run.requestedEffort??'CLI default'}; observed: ${run.model}; tokens: ${run.tokens}; cost: ${run.cost}`});
     });
     const offArchive = window.cth.onHiveAgentArchived?.((e) => {
       if (e?.id) useStore.getState().archiveAgent(e.id);

@@ -11,7 +11,7 @@ import type { HiveManager, HiveTask } from './hive';
 import type { PtyManager } from './pty';
 import type { WebContents } from 'electron';
 
-export interface OfficeRequest { repo: 'FE' | 'BE'; runtime: 'claude' | 'codex'; model?:string; prompt: string; tier?:TaskTier; featureId?:string; role?:'frontend'|'backend'|'architect'|'qa'|'reviewer'|'integration'; baseRef?:string; continueFrom?:string; edit?:{file:string;old:string;new:string;dryRun?:boolean}; }
+export interface OfficeRequest { repo: 'FE' | 'BE'; runtime: 'claude' | 'codex'; model?:string; effort?:'low'|'medium'|'high'|'xhigh'|'max'; prompt: string; tier?:TaskTier; featureId?:string; role?:'frontend'|'backend'|'architect'|'qa'|'reviewer'|'integration'; baseRef?:string; continueFrom?:string; edit?:{file:string;old:string;new:string;dryRun?:boolean}; }
 const quote = (s: string) => "'" + s.replace(/'/g, "'\\''") + "'";
 const git = (cwd: string, ...args: string[]) => execFileSync('git', ['-C', cwd, ...args], {encoding:'utf8',timeout:15000}).trim();
 interface Run { id: string; agentId:string; role: string; repo: string; runtime: string; cwd: string; branch: string; startedAt: string; status: string; model: string; tokens: number | string; cost: string | number; policy?:ReturnType<typeof routeCodingTask>; }
@@ -45,6 +45,7 @@ export class CodingOffice {
     if(raw.featureId&&(!/^[A-Za-z0-9_-]{1,80}$/.test(raw.featureId)))throw new Error('Invalid parent task id');
     if(raw.tier&&!['XS','S','M','L'].includes(raw.tier))throw new Error('Invalid tier');
     if(raw.model!==undefined&&(typeof raw.model!=='string'||!/^[A-Za-z0-9][A-Za-z0-9._:/-]{0,119}$/.test(raw.model)))throw new Error('Invalid model id');
+    if(raw.effort!==undefined&&!(raw.runtime==='claude'?['low','medium','high','xhigh','max']:['low','medium','high','xhigh']).includes(raw.effort))throw new Error('Invalid effort for selected runtime');
     const policy=routeCodingTask(raw);
     const role=raw.role??(raw.repo==='FE'?'frontend':'backend');
     if(!['frontend','backend','architect','qa','reviewer','integration'].includes(role))throw new Error('Invalid logical role');
@@ -68,7 +69,7 @@ export class CodingOffice {
     // Deliberately fail closed. Never fall back to a shared or protected checkout.
     if(!previous) git(repo,'worktree','add',cwd,'-b',branch,raw.baseRef??'HEAD');
     const run:Run={id,agentId:`office-${role}`,role,repo:raw.repo,runtime:raw.runtime,cwd,branch,startedAt:new Date().toISOString(),status:'running',model:'unknown',tokens:'unknown',cost:'unknown'};
-    Object.assign(run,{requestedModel:raw.edit?null:raw.model??null,policy,prompt:raw.prompt,featureId:raw.featureId??null,runtime:raw.edit?'none':raw.runtime,attempt:(previous?.attempt??0)+1,fromRun:previous?.id??null});
+    Object.assign(run,{requestedModel:raw.edit?null:raw.model??null,requestedEffort:raw.edit?null:raw.effort??null,policy,prompt:raw.prompt,featureId:raw.featureId??null,runtime:raw.edit?'none':raw.runtime,attempt:(previous?.attempt??0)+1,fromRun:previous?.id??null});
     this.runs.set(id,run); this.owners.set(id,owner); this.persist(run);
     this.hive.addTask({id,title:raw.prompt.slice(0,100),description:raw.prompt,assignee:run.agentId,runId:id,status:'doing',dependsOn:[],priority:1,createdAt:new Date().toISOString(),repo:raw.repo,branch,role,runtime:raw.runtime,tier:policy.tier,featureId:raw.featureId??null} as HiveTask);
     if(raw.featureId){
@@ -104,7 +105,7 @@ export class CodingOffice {
     await this.hive.ensureAgent({id:run.agentId,name:role[0].toUpperCase()+role.slice(1),provider:raw.runtime,role,cwd});
     // Do NOT inject the full hive roster/prompt into the CLI: direct task only.
     const prompt=`${raw.prompt}\nWork only in this worktree. Do not delegate, commit, push, merge, deploy, access secrets or modify .git. Preserve repository instructions. Return changed files and checks.`;
-    const command=`python3 ${quote(roots.worker)} --worktree ${quote(cwd)} --runtime ${raw.runtime} ${raw.model?'--model '+quote(raw.model)+' ':''}--seconds ${policy.seconds} --token-cap ${policy.tokens} --max-steps ${policy.steps} ${role==='reviewer'?'--read-only ':''}--log ${quote(join(config.harnessHome,'office-runs',id,'terminal.log'))} --prompt ${quote(prompt)}`;
+    const command=`python3 ${quote(roots.worker)} --worktree ${quote(cwd)} --runtime ${raw.runtime} ${raw.model?'--model '+quote(raw.model)+' ':''}${raw.effort?'--effort '+quote(raw.effort)+' ':''}--seconds ${policy.seconds} --token-cap ${policy.tokens} --max-steps ${policy.steps} ${role==='reviewer'?'--read-only ':''}--log ${quote(join(config.harnessHome,'office-runs',id,'terminal.log'))} --prompt ${quote(prompt)}`;
     const result=this.pty.spawn({id,cwd,command:'python3',shellScript:command,cols:120,rows:32},owner);
     if (!result.ok) { this.finish(id,1,result.error); throw new Error(result.error); }
     owner?.send('hive:agentSpawned',{id:run.agentId,ptyId:id,name:role[0].toUpperCase()+role.slice(1),provider:raw.runtime,model:raw.model,cwd,command,role,worktreePath:cwd,character:({frontend:'jim',backend:'dwight',architect:'oscar',qa:'pam',reviewer:'stanley',integration:'ryan'} as Record<string,string>)[role]});

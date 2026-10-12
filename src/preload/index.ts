@@ -569,12 +569,12 @@ export interface PreservedWorktreeSnapshot {
 }
 
 const api = {
-  onOfficeRunChanged: (cb: (run: {id:string;agentId:string;status:string;runtime:string;requestedModel?:string|null;model:string;tokens:number|string;cost:string}) => void): (() => void) => {
+  onOfficeRunChanged: (cb: (run: {id:string;agentId:string;status:string;runtime:string;requestedModel?:string|null;requestedEffort?:string|null;model:string;tokens:number|string;cost:string}) => void): (() => void) => {
     const listener = (_e: IpcRendererEvent, run: Parameters<typeof cb>[0]) => cb(run);
     ipcRenderer.on('office:runChanged',listener);
     return () => ipcRenderer.removeListener('office:runChanged',listener);
   },
-  startOfficeTask: (request: {repo:'FE'|'BE';runtime:'claude'|'codex';model?:string;prompt:string;tier?:'XS'|'S'|'M'|'L';featureId?:string;role?:'frontend'|'backend'|'architect'|'qa'|'reviewer'|'integration';baseRef?:string;continueFrom?:string;edit?:{file:string;old:string;new:string;dryRun?:boolean}}): Promise<{ok:boolean;error?:string;run?:{id:string;cwd:string;branch:string}}> => ipcRenderer.invoke('office:start',request),
+  startOfficeTask: (request: {repo:'FE'|'BE';runtime:'claude'|'codex';model?:string;effort?:'low'|'medium'|'high'|'xhigh'|'max';prompt:string;tier?:'XS'|'S'|'M'|'L';featureId?:string;role?:'frontend'|'backend'|'architect'|'qa'|'reviewer'|'integration';baseRef?:string;continueFrom?:string;edit?:{file:string;old:string;new:string;dryRun?:boolean}}): Promise<{ok:boolean;error?:string;run?:{id:string;cwd:string;branch:string}}> => ipcRenderer.invoke('office:start',request),
   version: __APP_VERSION__,
 
   // ─── Analytics ───────────────────────────────────────────────────────────
