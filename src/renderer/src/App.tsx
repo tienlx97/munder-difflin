@@ -403,8 +403,8 @@ export function App() {
         <div style={{ flex: 1, minHeight: 0, minWidth: 0, position: 'relative' }}>
           <OfficeFloor />
           <MemoryPanel />
-          {agentCount === 0 && godStatus === 'booting' && <MichaelBooting />}
-          {agentCount === 0 && godStatus !== 'booting' && (
+          {agentCount === 0 && config?.managerAutostart !== false && godStatus === 'booting' && <MichaelBooting />}
+          {agentCount === 0 && config?.managerAutostart !== false && godStatus !== 'booting' && (
             <div style={{
               position: 'absolute', inset: 0,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -440,7 +440,7 @@ export function App() {
         }}>
           {agent ? (
             <AgentDetailPanel agent={agent} />
-          ) : godStatus === 'booting' ? (
+          ) : config?.managerAutostart !== false && godStatus === 'booting' ? (
             <PixelPanel variant="default" noPadding style={{
               padding: 16, height: '100%',
               display: 'flex', flexDirection: 'column',
@@ -466,14 +466,13 @@ export function App() {
                 color: 'var(--cth-ink-500)'
               }}>NO AGENT SELECTED</div>
               <p style={{ margin: 0, fontSize: 13, textAlign: 'center', color: 'var(--cth-ink-700)' }}>
-                Spawn an agent from the strip below.<br />
-                The terminal and command bar will land here.
+                {config?.codingOffice ? 'Use Coding task above to start a worker. Select its character to view the terminal.' : 'Spawn an agent from the strip below to view its terminal.'}
               </p>
-              <PixelButton variant="secondary" size="md" onClick={() => setAddAgentOpen(true)}>
+              {!config?.codingOffice && <PixelButton variant="secondary" size="md" onClick={() => setAddAgentOpen(true)}>
                 <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
                   <Icon name="plus" /> add agent
                 </span>
-              </PixelButton>
+              </PixelButton>}
             </PixelPanel>
           )}
         </div>
