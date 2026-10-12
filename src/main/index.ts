@@ -597,6 +597,8 @@ function removeWorkerScratch(workerId: string): void {
 const codingOffice = new CodingOffice(hive, ptyManager);
 ipcMain.handle('office:preferences', () => {try{return {ok:true,defaults:codingOffice.preferences()};}catch(e){return {ok:false,error:String(e)};}});
 ipcMain.handle('office:savePreference', (_evt, role:string, value:Parameters<CodingOffice['savePreference']>[1]) => {try{return {ok:true,defaults:codingOffice.savePreference(role,value)};}catch(e){return {ok:false,error:String(e)};}});
+ipcMain.handle('office:saveTeam', (_evt, values:Parameters<CodingOffice['saveTeam']>[0]) => {try{return {ok:true,defaults:codingOffice.saveTeam(values)};}catch(e){return {ok:false,error:String(e)};}});
+ipcMain.handle('office:dispatch', async (evt, request:Parameters<CodingOffice['dispatch']>[0]) => {try{const run=await codingOffice.dispatch(request,BrowserWindow.fromWebContents(evt.sender)?.webContents??null);if(run.status==='running')ptyToAgent.set(run.id,run.agentId);return {ok:true,run};}catch(e){return {ok:false,error:String(e)};}});
 ipcMain.handle('office:start', async (evt, request: OfficeRequest) => {
   try {
     const run = await codingOffice.start(request, BrowserWindow.fromWebContents(evt.sender)?.webContents ?? null);

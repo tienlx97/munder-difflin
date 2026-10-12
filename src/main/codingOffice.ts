@@ -58,6 +58,26 @@ export class CodingOffice {
     writeFileSync(temp,JSON.stringify(values,null,2)+'\n',{mode:0o600});renameSync(temp,path);
     return values;
   }
+  saveTeam(values:Record<string,OfficeDefaults>) {
+    const roles=['frontend','backend','architect','qa','reviewer','integration'];
+    if(!values||typeof values!=='object'||Array.isArray(values))throw new Error('Invalid team configuration');
+    for(const role of roles)this.validatePreference(role,values[role]);
+    const home=readConfig().harnessHome;if(!home)throw new Error('No workspace selected');
+    // Read first so malformed existing settings are preserved for diagnosis.
+    this.preferences();const normalized:Record<string,OfficeDefaults>={};
+    for(const role of roles){const v=values[role];normalized[role]={runtime:v.runtime,models:{...v.models},efforts:{...v.efforts}};}
+    mkdirSync(home,{recursive:true});const path=join(home,'office-preferences.json'),temp=path+'.'+randomUUID()+'.tmp';
+    writeFileSync(temp,JSON.stringify(normalized,null,2)+'\n',{mode:0o600});renameSync(temp,path);return normalized;
+  }
+  async dispatch(request:Omit<OfficeRequest,'runtime'|'model'|'effort'>,owner:WebContents|null) {
+    if(!request||!['FE','BE'].includes(request.repo))throw new Error('Select FE or BE');
+    const preferences=this.preferences();
+    if(!['frontend','backend','architect','qa','reviewer','integration'].every(role=>preferences[role]))throw new Error('Configure the agent team first');
+    const role=request.role??(request.repo==='FE'?'frontend':'backend'),saved=preferences[role];
+    if(!saved)throw new Error('Role is not configured');
+    const model=saved.models[saved.runtime],effort=saved.efforts[saved.runtime] as OfficeRequest['effort'];
+    return this.start({...request,role,runtime:saved.runtime,model:model||undefined,effort:effort||undefined},owner);
+  }
   async start(raw: OfficeRequest, owner: WebContents | null) {
     const config=readConfig(), roots=config.codingOffice;
     if (!roots || !config.harnessHome) throw new Error('Coding office roots/helper are not configured');

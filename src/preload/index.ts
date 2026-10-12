@@ -570,6 +570,8 @@ export interface PreservedWorktreeSnapshot {
 
 type OfficeDefaults = {runtime:'claude'|'codex';models:Record<'claude'|'codex',string>;efforts:Record<'claude'|'codex',string>};
 const api = {
+  saveOfficeTeam: (values:Record<string,OfficeDefaults>):Promise<{ok:boolean;defaults?:Record<string,OfficeDefaults>;error?:string}> => ipcRenderer.invoke('office:saveTeam',values),
+  dispatchOfficeTask: (request:{repo:'FE'|'BE';prompt:string;role?:'frontend'|'backend'|'architect'|'qa'|'reviewer'|'integration';featureId?:string;baseRef?:string;continueFrom?:string;edit?:{file:string;old:string;new:string;dryRun?:boolean}}):Promise<{ok:boolean;error?:string;run?:{id:string;cwd:string;branch:string}}> => ipcRenderer.invoke('office:dispatch',request),
   officePreferences: ():Promise<{ok:boolean;defaults?:Record<string,OfficeDefaults>;error?:string}> => ipcRenderer.invoke('office:preferences'),
   saveOfficePreference: (role:string,value:OfficeDefaults):Promise<{ok:boolean;defaults?:Record<string,OfficeDefaults>;error?:string}> => ipcRenderer.invoke('office:savePreference',role,value),
   onOfficeRunChanged: (cb: (run: {id:string;agentId:string;status:string;runtime:string;requestedModel?:string|null;requestedEffort?:string|null;model:string;tokens:number|string;cost:string}) => void): (() => void) => {
