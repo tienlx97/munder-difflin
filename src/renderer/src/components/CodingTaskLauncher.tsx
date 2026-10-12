@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { modelsForProvider } from '@/store/config';
 import { TasksKanban } from './TasksKanban';
 import { routeCodingTask } from '@shared/codingOfficePolicy';
 
@@ -12,6 +13,8 @@ export function CodingTaskLauncher() {
   const [continueFrom,setContinueFrom]=useState('');
   const [repo,setRepo]=useState<'FE'|'BE'>('FE');
   const [runtime,setRuntime]=useState<'claude'|'codex'>('codex');
+  const [models,setModels]=useState<Record<'claude'|'codex',string>>({claude:'',codex:''});
+  const model=models[runtime];
   const [prompt,setPrompt]=useState('');
   const [exact,setExact]=useState(false);
   const [file,setFile]=useState('');
@@ -23,7 +26,7 @@ export function CodingTaskLauncher() {
   const start=async()=>{
     setBusy(true);setMessage('');
     try {
-      const result=await window.cth.startOfficeTask({repo,runtime,prompt,...(role?{role:role as 'reviewer'|'qa'|'architect'|'integration'}:{}),...(baseRef?{baseRef}:{}),...(featureId?{featureId}:{}),...(continueFrom?{continueFrom}:{}),...(exact?{edit:{file,old,new:replacement}}:{})});
+      const result=await window.cth.startOfficeTask({repo,runtime,prompt,...(model.trim()?{model:model.trim()}:{}),...(role?{role:role as 'reviewer'|'qa'|'architect'|'integration'}:{}),...(baseRef?{baseRef}:{}),...(featureId?{featureId}:{}),...(continueFrom?{continueFrom}:{}),...(exact?{edit:{file,old,new:replacement}}:{})});
       setMessage(result.ok?`${exact?'Checked patch':'Started'} ${repo} with ${exact?'zero workers':runtime}. Branch: ${result.run?.branch}`:result.error??'Launch failed');
     } catch(e) {setMessage(String(e));}
     finally {setBusy(false);}
@@ -36,6 +39,7 @@ export function CodingTaskLauncher() {
       <p>Launch one worker in an isolated worktree. Michael stays idle.</p>
       <label style={{display:'flex',flexDirection:'column',gap:4,marginBottom:10}}>Repository <select aria-label="Repository" value={repo} onChange={e=>setRepo(e.target.value as 'FE'|'BE')}><option>FE</option><option>BE</option></select></label>{' '}
       <label style={{display:'flex',flexDirection:'column',gap:4,marginBottom:10}}>Runtime <select aria-label="Runtime" value={runtime} onChange={e=>setRuntime(e.target.value as 'claude'|'codex')}><option value="codex">Codex</option><option value="claude">Claude Code</option></select></label>
+      <label style={{display:'flex',flexDirection:'column',gap:4,marginBottom:10}}>Model<input aria-label="Model" list={`office-models-${runtime}`} value={model} placeholder="CLI default (leave empty)" disabled={exact} onChange={e=>setModels({...models,[runtime]:e.target.value})} /><datalist id={`office-models-${runtime}`}>{modelsForProvider(runtime).filter(m=>m.id).map(m=><option key={m.id} value={m.id}>{m.label}</option>)}</datalist></label>
       <label style={{display:'flex',flexDirection:'column',gap:4,marginBottom:10}}>Role <select aria-label="Logical role" value={role} onChange={e=>setRole(e.target.value)}><option value="">Coder for selected repo</option><option value="architect">Architect</option><option value="qa">QA</option><option value="reviewer">Reviewer</option><option value="integration">Integration</option></select></label>
       <label style={{display:'flex',flexDirection:'column',gap:4,marginBottom:10}}>Parent task ID (optional)<input value={featureId} onChange={e=>setFeatureId(e.target.value)} /></label>
       <label style={{display:'flex',flexDirection:'column',gap:4,marginBottom:10}}>Base branch (optional)<input value={baseRef} onChange={e=>setBaseRef(e.target.value)} /></label>
