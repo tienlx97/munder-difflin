@@ -568,7 +568,10 @@ export interface PreservedWorktreeSnapshot {
   preservedAt: number;
 }
 
+type OfficeDefaults = {runtime:'claude'|'codex';models:Record<'claude'|'codex',string>;efforts:Record<'claude'|'codex',string>};
 const api = {
+  officePreferences: ():Promise<{ok:boolean;defaults?:Record<string,OfficeDefaults>;error?:string}> => ipcRenderer.invoke('office:preferences'),
+  saveOfficePreference: (role:string,value:OfficeDefaults):Promise<{ok:boolean;defaults?:Record<string,OfficeDefaults>;error?:string}> => ipcRenderer.invoke('office:savePreference',role,value),
   onOfficeRunChanged: (cb: (run: {id:string;agentId:string;status:string;runtime:string;requestedModel?:string|null;requestedEffort?:string|null;model:string;tokens:number|string;cost:string}) => void): (() => void) => {
     const listener = (_e: IpcRendererEvent, run: Parameters<typeof cb>[0]) => cb(run);
     ipcRenderer.on('office:runChanged',listener);

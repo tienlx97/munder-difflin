@@ -1,6 +1,6 @@
 /** Narrow local-fork launch hook. Reuses native PTYs, hive tasks and avatars. */
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, realpathSync, readdirSync, lstatSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, realpathSync, readdirSync, lstatSync, readFileSync, writeFileSync, renameSync } from 'node:fs';
 import { join, isAbsolute, resolve, sep } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { readConfig } from './config';
@@ -15,6 +15,7 @@ export interface OfficeRequest { repo: 'FE' | 'BE'; runtime: 'claude' | 'codex';
 const quote = (s: string) => "'" + s.replace(/'/g, "'\\''") + "'";
 const git = (cwd: string, ...args: string[]) => execFileSync('git', ['-C', cwd, ...args], {encoding:'utf8',timeout:15000}).trim();
 interface Run { id: string; agentId:string; role: string; repo: string; runtime: string; cwd: string; branch: string; startedAt: string; status: string; model: string; tokens: number | string; cost: string | number; policy?:ReturnType<typeof routeCodingTask>; }
+export interface OfficeDefaults { runtime:'claude'|'codex'; models:Record<'claude'|'codex',string>; efforts:Record<'claude'|'codex',string>; }
 export class CodingOffice {
   private runs = new Map<string, Run>();
   private owners = new Map<string, WebContents | null>();
@@ -31,6 +32,31 @@ export class CodingOffice {
         }
       }catch{/* Preserve malformed evidence; never delete files or worktrees. */}
     }
+  }
+  preferences(): Record<string,OfficeDefaults> {
+    const home=readConfig().harnessHome;if(!home)throw new Error('No workspace selected');
+    const path=join(home,'office-preferences.json');
+    if(!existsSync(path))return {};
+    const values=JSON.parse(readFileSync(path,'utf8'));
+    if(!values||typeof values!=='object'||Array.isArray(values))throw new Error('Invalid saved office preferences');
+    for(const [role,value] of Object.entries(values))this.validatePreference(role,value as OfficeDefaults);
+    return values;
+  }
+  private validatePreference(role:string,value:OfficeDefaults) {
+    if(!['frontend','backend','architect','qa','reviewer','integration'].includes(role)||!value||!['claude','codex'].includes(value.runtime))throw new Error('Invalid role preferences');
+    for(const runtime of ['claude','codex'] as const){
+      const model=value.models?.[runtime],effort=value.efforts?.[runtime];
+      if(typeof model!=='string'||(model!==''&&!/^[A-Za-z0-9][A-Za-z0-9._:/-]{0,119}$/.test(model)))throw new Error('Invalid saved model');
+      if(!(runtime==='claude'?['','low','medium','high','xhigh','max']:['','low','medium','high','xhigh']).includes(effort))throw new Error('Invalid saved effort');
+    }
+  }
+  savePreference(role:string,value:OfficeDefaults) {
+    this.validatePreference(role,value);
+    const values=this.preferences(),home=readConfig().harnessHome!;
+    values[role]={runtime:value.runtime,models:{claude:value.models.claude,codex:value.models.codex},efforts:{claude:value.efforts.claude,codex:value.efforts.codex}};
+    mkdirSync(home,{recursive:true});const path=join(home,'office-preferences.json'),temp=path+'.'+randomUUID()+'.tmp';
+    writeFileSync(temp,JSON.stringify(values,null,2)+'\n',{mode:0o600});renameSync(temp,path);
+    return values;
   }
   async start(raw: OfficeRequest, owner: WebContents | null) {
     const config=readConfig(), roots=config.codingOffice;

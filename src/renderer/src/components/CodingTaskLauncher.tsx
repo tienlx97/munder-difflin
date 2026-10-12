@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { modelsForProvider } from '@/store/config';
 import { TasksKanban } from './TasksKanban';
 import { routeCodingTask } from '@shared/codingOfficePolicy';
@@ -25,6 +25,18 @@ export function CodingTaskLauncher() {
   const policy=routeCodingTask({repo,prompt,edit:exact?{}:undefined});
   const [busy,setBusy]=useState(false);
   const [message,setMessage]=useState('');
+  const roleKey=role||(repo==='FE'?'frontend':'backend');
+  const [defaults,setDefaults]=useState<Record<string,{runtime:'claude'|'codex';models:Record<'claude'|'codex',string>;efforts:Record<'claude'|'codex',string>}>>({});
+  const [loaded,setLoaded]=useState(false);
+  useEffect(()=>{let active=true;void window.cth.officePreferences().then(result=>{if(active){setDefaults(result.defaults??{});setLoaded(true);if(!result.ok)setMessage(result.error??'Cannot load preferences');}}).catch(e=>{if(active){setLoaded(true);setMessage(String(e));}});return()=>{active=false;};},[]);
+  useEffect(()=>{
+    if(!loaded)return;const saved=defaults[roleKey];
+    setRuntime(saved?.runtime??'codex');setModels(saved?.models??{claude:'',codex:''});setEfforts(saved?.efforts??{claude:'low',codex:'low'});
+  },[loaded,roleKey,defaults]);
+  const saveDefault=async()=>{
+    setBusy(true);setMessage('');
+    try{const result=await window.cth.saveOfficePreference(roleKey,{runtime,models:{claude:models.claude.trim(),codex:models.codex.trim()},efforts});if(result.ok){setDefaults(result.defaults??{});setMessage(`Saved defaults for ${roleKey} in this workspace.`);}else setMessage(result.error??'Save failed');}catch(e){setMessage(String(e));}finally{setBusy(false);}
+  };
   const start=async()=>{
     setBusy(true);setMessage('');
     try {
@@ -44,6 +56,7 @@ export function CodingTaskLauncher() {
       <label style={{display:'flex',flexDirection:'column',gap:4,marginBottom:10}}>Model<input aria-label="Model" list={`office-models-${runtime}`} value={model} placeholder="CLI default (leave empty)" disabled={exact} onChange={e=>setModels({...models,[runtime]:e.target.value})} /><datalist id={`office-models-${runtime}`}>{modelsForProvider(runtime).filter(m=>m.id).map(m=><option key={m.id} value={m.id}>{m.label}</option>)}</datalist></label>
       <label style={{display:'flex',flexDirection:'column',gap:4,marginBottom:10}}>Effort<select aria-label="Effort" disabled={exact} value={effort} onChange={e=>setEfforts({...efforts,[runtime]:e.target.value})}><option value="">CLI default</option>{(runtime==='claude'?['low','medium','high','xhigh','max']:['low','medium','high','xhigh']).map(value=><option key={value} value={value}>{value}</option>)}</select></label>
       <label style={{display:'flex',flexDirection:'column',gap:4,marginBottom:10}}>Role <select aria-label="Logical role" value={role} onChange={e=>setRole(e.target.value)}><option value="">Coder for selected repo</option><option value="architect">Architect</option><option value="qa">QA</option><option value="reviewer">Reviewer</option><option value="integration">Integration</option></select></label>
+      <button disabled={!loaded||busy||exact} onClick={()=>void saveDefault()}>Save defaults for {roleKey}</button>
       <label style={{display:'flex',flexDirection:'column',gap:4,marginBottom:10}}>Parent task ID (optional)<input value={featureId} onChange={e=>setFeatureId(e.target.value)} /></label>
       <label style={{display:'flex',flexDirection:'column',gap:4,marginBottom:10}}>Base branch (optional)<input value={baseRef} onChange={e=>setBaseRef(e.target.value)} /></label>
       <label style={{display:'flex',flexDirection:'column',gap:4,marginBottom:10}}>Continue stopped run (optional)<input value={continueFrom} onChange={e=>setContinueFrom(e.target.value)} /></label>
@@ -51,7 +64,7 @@ export function CodingTaskLauncher() {
       <label style={{display:'flex',flexDirection:'column',gap:4,marginBottom:10}}><input type="checkbox" checked={exact} onChange={e=>setExact(e.target.checked)} />Exact FE edit (zero model calls)</label>
       {exact&&<><label style={{display:'flex',flexDirection:'column',gap:4,marginBottom:10}}>Source file<input value={file} onChange={e=>setFile(e.target.value)} /></label><label style={{display:'flex',flexDirection:'column',gap:4,marginBottom:10}}>Original exact text<input value={old} onChange={e=>setOld(e.target.value)} /></label><label style={{display:'flex',flexDirection:'column',gap:4,marginBottom:10}}>Replacement<input value={replacement} onChange={e=>setReplacement(e.target.value)} /></label></>}
       <p>{policy.tier} · {policy.seconds} second limit · {policy.risk} risk. No automatic retry. Review patches before merge or deployment.</p>
-      <button disabled={busy||!prompt.trim()} onClick={()=>void start()}>{busy?'Starting…':'Start worker'}</button>{' '}
+      <button disabled={!loaded||busy||!prompt.trim()} onClick={()=>void start()}>{busy?'Starting…':'Start worker'}</button>{' '}
       <button onClick={()=>setOpen(false)}>Close</button>
       <p role="status">{message}</p>
     </section>}

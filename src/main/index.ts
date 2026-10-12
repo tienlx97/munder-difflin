@@ -595,6 +595,8 @@ function removeWorkerScratch(workerId: string): void {
 // relaunch carries `noAutoInstall`, so the installer can never fire (let alone loop) a
 // second time — a binary that's somehow still missing just spawns and exits normally.
 const codingOffice = new CodingOffice(hive, ptyManager);
+ipcMain.handle('office:preferences', () => {try{return {ok:true,defaults:codingOffice.preferences()};}catch(e){return {ok:false,error:String(e)};}});
+ipcMain.handle('office:savePreference', (_evt, role:string, value:Parameters<CodingOffice['savePreference']>[1]) => {try{return {ok:true,defaults:codingOffice.savePreference(role,value)};}catch(e){return {ok:false,error:String(e)};}});
 ipcMain.handle('office:start', async (evt, request: OfficeRequest) => {
   try {
     const run = await codingOffice.start(request, BrowserWindow.fromWebContents(evt.sender)?.webContents ?? null);
