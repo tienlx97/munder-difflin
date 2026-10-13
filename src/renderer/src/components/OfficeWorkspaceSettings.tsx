@@ -1,0 +1,9 @@
+import {useEffect,useState} from 'react';
+import {TASK_LIMITS} from '@shared/codingOfficePolicy';
+export function OfficeWorkspaceSettings(){
+ const [roots,setRoots]=useState({FE:'',BE:'',worker:''}),[message,setMessage]=useState(''),[busy,setBusy]=useState(false);
+ useEffect(()=>{void window.cth.getConfig().then(c=>{if(c.codingOffice)setRoots(c.codingOffice);}).catch(e=>setMessage(String(e)));},[]);
+ const save=async()=>{setBusy(true);try{const r=await window.cth.saveOfficeRoots({FE:roots.FE,BE:roots.BE});setMessage(r.ok?'Repository paths saved.':r.error??'Cannot save');}catch(e){setMessage(String(e));}finally{setBusy(false);}};
+ const check=async()=>{setBusy(true);try{const r=await window.cth.officeDoctor();setMessage(r.join('\n'));}catch(e){setMessage(String(e));}finally{setBusy(false);}};
+ return <details className="office-workspace"><summary>Workspace configuration & diagnostics</summary><p className="office-muted">Repository paths are shared by the whole team.</p>{(['FE','BE'] as const).map(repo=><label key={repo} style={{display:'block',marginBottom:12}}>{repo} repository<input aria-label={`${repo} repository path`} value={roots[repo]} onChange={e=>setRoots({...roots,[repo]:e.target.value})}/></label>)}<button disabled={busy} onClick={()=>void save()}>Save repository paths</button>{' '}<button disabled={busy} onClick={()=>void check()}>Check runtimes</button><pre role="status" style={{whiteSpace:'pre-wrap'}}>{message}</pre><h4>Task limits</h4><p className="office-muted">A shared token budget covers all attempts. Observed usage can arrive late.</p><table><thead><tr><th>Task</th><th>Tokens</th><th>Seconds</th><th>Steps</th></tr></thead><tbody>{Object.entries(TASK_LIMITS).map(([tier,v])=><tr key={tier}><td>{tier}</td><td>{v.tokens.toLocaleString()}</td><td>{v.seconds}</td><td>{v.steps}</td></tr>)}</tbody></table><p>Verification: the selected repository’s harness/verify.sh, followed by review.</p></details>;
+}

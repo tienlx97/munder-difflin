@@ -1,6 +1,8 @@
-import { useEffect, useState, type CSSProperties } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { modelsForProvider } from '@/store/config';
-import { TasksKanban } from './TasksKanban';
+import './CodingOffice.css';
+import {OfficeWorkspaceSettings} from './OfficeWorkspaceSettings';
+import { OfficeRunHistory } from './OfficeRunHistory';
 import { routeCodingTask } from '@shared/codingOfficePolicy';
 
 type Runtime = 'claude' | 'codex';
@@ -13,7 +15,6 @@ const roles = [
 type Role = typeof roles[number][0];
 const initial = (): Defaults => ({runtime:'codex',models:{claude:'',codex:''},efforts:{claude:'low',codex:'low'}});
 const field: CSSProperties = {display:'flex',flexDirection:'column',gap:4,marginBottom:10};
-const panel: CSSProperties = {position:'absolute',top:48,right:16,zIndex:1000,width:420,maxWidth:'calc(100vw - 32px)',maxHeight:'calc(100vh - 80px)',overflowY:'auto',boxSizing:'border-box',padding:20,background:'var(--cth-paper-100)',color:'var(--cth-ink-900)',border:'1px solid var(--cth-ink-500)'};
 const footer: CSSProperties = {position:'sticky',bottom:-20,background:'var(--cth-paper-100)',padding:'12px 0',borderTop:'1px solid var(--cth-ink-500)'};
 
 /** Configure the team once; dispatch a task using its saved role settings. */
@@ -23,8 +24,22 @@ export function CodingTaskLauncher() {
   const [loaded,setLoaded]=useState(false), [busy,setBusy]=useState(false), [message,setMessage]=useState('');
   const [repo,setRepo]=useState<'FE'|'BE'>('FE'), [prompt,setPrompt]=useState('');
   const [role,setRole]=useState(''), [featureId,setFeatureId]=useState(''), [baseRef,setBaseRef]=useState(''), [continueFrom,setContinueFrom]=useState('');
+  const [readOnly,setReadOnly]=useState(false);
   const [exact,setExact]=useState(false), [file,setFile]=useState(''), [old,setOld]=useState(''), [replacement,setReplacement]=useState('');
-  const ready=roles.every(([id])=>!!defaults[id]);
+  const ready=!!defaults[role||(repo==='FE'?'frontend':'backend')];
+  const [activeRole,setActiveRole]=useState<Role>('frontend');
+  const dialogRef=useRef<HTMLElement>(null);
+  const [runs,setRuns]=useState<Array<{id:string;repo:string;role:string;status:string;prompt?:string;tokens:number|string}>>([]);
+  useEffect(()=>{if(!open)return;void window.cth.officeRuns().then(r=>setRuns(r));},[open]);
+  useEffect(()=>{
+    if(!open&&!settings&&!board)return;
+    const previous=document.activeElement as HTMLElement;
+    const dialog=dialogRef.current;dialog?.querySelector<HTMLElement>('button,input,select,textarea')?.focus();
+    const key=(e:KeyboardEvent)=>{
+      if(e.key==='Escape'){setOpen(false);setSettings(false);setBoard(false);}
+      if(e.key==='Tab'&&dialog){const nodes=Array.from(dialog.querySelectorAll<HTMLElement>('button:not(:disabled),input,select,textarea,summary,[tabindex=0]')).filter(n=>n.getClientRects().length);const first=nodes[0],last=nodes.at(-1);if(e.shiftKey&&document.activeElement===first){e.preventDefault();last?.focus();}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first?.focus();}}
+    };document.addEventListener('keydown',key);return()=>{document.removeEventListener('keydown',key);previous?.focus();};
+  },[open,settings,board]);
   const roleKey=role||(repo==='FE'?'frontend':'backend');
   const selected=defaults[roleKey];
   const policy=routeCodingTask({repo,prompt,edit:exact?{}:undefined});
@@ -41,10 +56,11 @@ export function CodingTaskLauncher() {
     setDraft(Object.fromEntries(roles.map(([id])=>[id,defaults[id]??initial()])));
     setMessage('');setOpen(false);setBoard(false);setSettings(true);
   };
+  useEffect(()=>{const handler=()=>configure();window.addEventListener('office:configure',handler);return()=>window.removeEventListener('office:configure',handler);},[defaults]);
   const newTask=()=>{
     if(!loaded)return;
     if(!ready){configure();return;}
-    if(!open){setRole('');setExact(false);setPrompt('');setFeatureId('');setBaseRef('');setContinueFrom('');}
+    if(!open){setRole('');setReadOnly(false);setExact(false);setPrompt('');setFeatureId('');setBaseRef('');setContinueFrom('');}
     setMessage('');setSettings(false);setBoard(false);setOpen(!open);
   };
   const change=(id:string,value:Defaults)=>setDraft(current=>({...current,[id]:value}));
@@ -61,19 +77,19 @@ export function CodingTaskLauncher() {
     if(!prompt.trim()){setMessage('Enter a task before starting a worker.');return;}
     setBusy(true);setMessage('');
     try{
-      const result=await window.cth.dispatchOfficeTask({repo,prompt,...(role?{role:role as Role}:{}),...(featureId?{featureId}:{}),...(baseRef?{baseRef}:{}),...(continueFrom?{continueFrom}:{}),...(exact?{edit:{file,old,new:replacement}}:{})});
+      const result=await window.cth.dispatchOfficeTask({repo,prompt,readOnly,...(role?{role:role as Role}:{}),...(featureId?{featureId}:{}),...(baseRef?{baseRef}:{}),...(continueFrom?{continueFrom}:{}),...(exact?{edit:{file,old,new:replacement}}:{})});
       setMessage(result.ok?`${exact?'Checked patch':'Started'} ${repo} with ${exact?'zero workers':selected?.runtime}. Branch: ${result.run?.branch}`:result.error??'Launch failed');
     }catch(e){setMessage(String(e));}finally{setBusy(false);}
   };
   return <>
-    <button className="cth-titlebar-nodrag" disabled={!loaded} onClick={newTask}>Coding task</button>
-    <button className="cth-titlebar-nodrag" disabled={!loaded} onClick={configure}>Agent settings</button>
-    <button className="cth-titlebar-nodrag" onClick={()=>{setBoard(!board);setOpen(false);setSettings(false);}}>Task board</button>
-    {board&&<section role="dialog" aria-label="Task board" className="cth-titlebar-nodrag" style={{...panel,left:20,right:20,width:'auto',zIndex:1001}}><button onClick={()=>setBoard(false)}>Close board</button><TasksKanban /></section>}
-    {settings&&<section role="dialog" aria-label="Agent settings" className="cth-titlebar-nodrag" style={{...panel,width:560}}>
+    <button className="cth-titlebar-nodrag office-nav" disabled={!loaded} onClick={newTask}>Coding task</button>
+    <button className="cth-titlebar-nodrag office-nav" disabled={!loaded} onClick={configure}>Agent settings</button>
+    <button className="cth-titlebar-nodrag office-nav" onClick={()=>{setBoard(!board);setOpen(false);setSettings(false);}}>Task board</button>
+    {board&&<section ref={dialogRef} aria-modal="true" role="dialog" aria-label="Task board" className="cth-titlebar-nodrag office-dialog" style={{width:'min(1000px,calc(100vw - 48px))'}}><button onClick={()=>setBoard(false)}>Close board</button><OfficeRunHistory /></section>}
+    {settings&&<section ref={dialogRef} aria-modal="true" role="dialog" aria-label="Agent settings" className="cth-titlebar-nodrag office-dialog office-team">
       <h3>Configure your agent team</h3>
-      <p>Save once for this workspace. Configuring an agent does not start it.</p>
-      {roles.map(([id,label])=>{
+      <p className="office-muted">Configure once. Each task uses its saved agent settings.</p><div className="office-team-layout"><nav aria-label="Agent roles">{roles.map(([id,label])=><button key={id} aria-pressed={activeRole===id} onClick={()=>setActiveRole(id)}>{label}<small>{draft[id]?.runtime} · {draft[id]?.efforts[draft[id]?.runtime]||'CLI default'}</small></button>)}</nav><div>
+      {roles.filter(([id])=>id===activeRole).map(([id,label])=>{
         const value=draft[id]??initial(),runtime=value.runtime;
         return <fieldset key={id} style={{marginBottom:12,padding:12}}><legend>{label}</legend>
           <label style={field}>Runtime<select aria-label={`${id} Runtime`} value={runtime} onChange={e=>change(id,{...value,runtime:e.target.value as Runtime})}><option value="codex">Codex</option><option value="claude">Claude Code</option></select></label>
@@ -81,23 +97,25 @@ export function CodingTaskLauncher() {
           <label style={field}>Effort<select aria-label={`${id} Effort`} value={value.efforts[runtime]} onChange={e=>change(id,{...value,efforts:{...value.efforts,[runtime]:e.target.value}})}><option value="">CLI default</option>{(runtime==='claude'?['low','medium','high','xhigh','max']:['low','medium','high','xhigh']).map(v=><option key={v}>{v}</option>)}</select></label>
         </fieldset>;
       })}
+      <button className="office-secondary" onClick={()=>setDraft(Object.fromEntries(roles.map(([id])=>[id,structuredClone(draft[activeRole])])))}>Apply this configuration to all roles</button><p className="office-muted">{JSON.stringify(draft)===JSON.stringify(defaults)?'All changes saved':'Unsaved changes'}</p></div></div>
+      <OfficeWorkspaceSettings />
       <footer style={footer}><button disabled={busy} onClick={()=>void save()}>{busy?'Saving…':'Save team configuration'}</button>{' '}<button onClick={()=>setSettings(false)}>Close settings</button><p role="status" style={{overflowWrap:'anywhere'}}>{message}</p></footer>
     </section>}
-    {open&&<section role="dialog" aria-label="Coding task" className="cth-titlebar-nodrag" style={panel}>
+    {open&&<section ref={dialogRef} aria-modal="true" role="dialog" aria-label="Coding task" className="cth-titlebar-nodrag office-dialog office-task">
       <h3>New coding task</h3>
-      <label style={field}>Repository<select aria-label="Repository" value={repo} onChange={e=>setRepo(e.target.value as 'FE'|'BE')}><option>FE</option><option>BE</option></select></label>
+      <label style={field}>Repository<select aria-label="Repository" value={repo} onChange={e=>{setRepo(e.target.value as 'FE'|'BE');setExact(false);setContinueFrom('');}}><option>FE</option><option>BE</option></select></label>
       <label style={field}>Task<textarea aria-label="Task" rows={6} value={prompt} placeholder="Describe the change or problem to solve…" onChange={e=>setPrompt(e.target.value)} /></label>
       <p>{roleKey}: {selected?.runtime} · {selected?.models[selected.runtime]||'CLI default'} · effort {selected?.efforts[selected.runtime]||'CLI default'}</p>
-      <details><summary>Advanced options</summary>
+      <details><summary>Advanced options</summary><label style={{display:'flex',gap:8}}><input type="checkbox" checked={readOnly} onChange={e=>{setReadOnly(e.target.checked);setExact(false);}} />Read-only analysis (no code changes)</label>
         <label style={field}>Specialist override<select aria-label="Logical role" value={role} onChange={e=>setRole(e.target.value)}><option value="">Automatic FE / BE developer</option>{roles.filter(([id])=>!['frontend','backend'].includes(id)).map(([id,label])=><option key={id} value={id}>{label}</option>)}</select></label>
         <label style={field}>Parent task ID (optional)<input value={featureId} onChange={e=>setFeatureId(e.target.value)} /></label>
         <label style={field}>Base branch (optional)<input value={baseRef} onChange={e=>setBaseRef(e.target.value)} /></label>
-        <label style={field}>Continue stopped run (optional)<input value={continueFrom} onChange={e=>setContinueFrom(e.target.value)} /></label>
-        <label style={{display:'flex',gap:8,marginBottom:10}}><input type="checkbox" checked={exact} onChange={e=>setExact(e.target.checked)} />Exact FE edit (zero model calls)</label>
+        <label style={field}>Continue stopped run (optional)<select value={continueFrom} onChange={e=>setContinueFrom(e.target.value)}><option value="">New worktree</option>{runs.filter(r=>r.repo===repo&&r.role===roleKey&&!['running','verifying','done'].includes(r.status)).map(r=><option key={r.id} value={r.id}>{r.prompt?.slice(0,65)||r.id} · {r.status}</option>)}</select></label>
+        {repo==='FE'&&!readOnly&&<label style={{display:'flex',gap:8,marginBottom:10}}><input type="checkbox" checked={exact} onChange={e=>setExact(e.target.checked)} />Exact FE edit (zero model calls)</label>}
         {exact&&<><label style={field}>Source file<input value={file} onChange={e=>setFile(e.target.value)} /></label><label style={field}>Original exact text<input value={old} onChange={e=>setOld(e.target.value)} /></label><label style={field}>Replacement<input value={replacement} onChange={e=>setReplacement(e.target.value)} /></label></>}
       </details>
       <p>{policy.tier} · {policy.seconds} second limit · {policy.risk} risk. One scoped worker; no automatic retry. Merge and deployment require approval.</p>
-      <footer style={footer}>{!prompt.trim()&&<p>Enter your request in Task, then click Start worker.</p>}<button disabled={!ready||busy} onClick={()=>void start()}>{busy?'Starting…':'Start worker'}</button>{' '}<button onClick={()=>setOpen(false)}>Close</button><p role="status" style={{overflowWrap:'anywhere'}}>{message}</p></footer>
+      <footer style={footer}>{!prompt.trim()&&<p>Enter your request in Task, then click Start worker.</p>}<button disabled={!ready||busy||!prompt.trim()} onClick={()=>void start()}>{busy?'Starting…':'Start worker'}</button>{' '}<button onClick={()=>setOpen(false)}>Close</button><p role="status" style={{overflowWrap:'anywhere'}}>{message}</p></footer>
     </section>}
   </>;
 }

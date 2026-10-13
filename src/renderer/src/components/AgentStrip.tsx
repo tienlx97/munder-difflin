@@ -231,7 +231,7 @@ export function AgentStrip({ config }: AgentStripProps) {
           })()}
         </div>
       ))}
-      <PixelButton
+      {!config?.codingOffice && <PixelButton
         variant="secondary"
         size="lg"
         style={{ alignSelf: 'center', flexShrink: 0 }}
@@ -240,13 +240,13 @@ export function AgentStrip({ config }: AgentStripProps) {
         <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center', whiteSpace: 'nowrap' }}>
           <Icon name="plus" /> {t('agentStrip.addAgent')}
         </span>
-      </PixelButton>
+      </PixelButton>}
       {/* ONE restore control, pinned to the strip's right edge. Busy (manual OR
           boot auto-restore) collapses to a single disabled "restoring your
           team…"; otherwise the button opens an upward dropdown listing last
           session's agents (per-agent ✕ dismiss + restore all). No outcome note
           is rendered afterwards — the restored agents appearing IS the outcome. */}
-      {(restorableAgents.length > 0 || restoreBusy) && (
+      {!config?.codingOffice && (restorableAgents.length > 0 || restoreBusy) && (
         <span
           ref={restoreBtnRef}
           style={{ alignSelf: 'center', flexShrink: 0, marginLeft: 'auto' }}

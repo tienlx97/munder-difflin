@@ -570,8 +570,13 @@ export interface PreservedWorktreeSnapshot {
 
 type OfficeDefaults = {runtime:'claude'|'codex';models:Record<'claude'|'codex',string>;efforts:Record<'claude'|'codex',string>};
 const api = {
+  saveOfficeRoots: (values:{FE:string;BE:string}):Promise<{ok:boolean;error?:string}> => ipcRenderer.invoke('office:roots',values),
+  officeDoctor: ():Promise<string[]> => ipcRenderer.invoke('office:doctor'),
+  officeRuns: ():Promise<Array<{id:string;repo:string;role:string;status:string;evidencePath?:string;prompt?:string;tokens:number|string;metrics?:{freshInputTokens?:number|string;inputTokens?:number;cachedInputTokens?:number;outputTokens?:number};verification?:{status:string;reason?:string}}>> => ipcRenderer.invoke('office:runs'),
+  verifyOfficeRun: (id:string):Promise<{ok:boolean;error?:string}> => ipcRenderer.invoke('office:verify',id),
+  acceptOfficeRun: (id:string):Promise<{ok:boolean;error?:string}> => ipcRenderer.invoke('office:accept',id),
   saveOfficeTeam: (values:Record<string,OfficeDefaults>):Promise<{ok:boolean;defaults?:Record<string,OfficeDefaults>;error?:string}> => ipcRenderer.invoke('office:saveTeam',values),
-  dispatchOfficeTask: (request:{repo:'FE'|'BE';prompt:string;role?:'frontend'|'backend'|'architect'|'qa'|'reviewer'|'integration';featureId?:string;baseRef?:string;continueFrom?:string;edit?:{file:string;old:string;new:string;dryRun?:boolean}}):Promise<{ok:boolean;error?:string;run?:{id:string;cwd:string;branch:string}}> => ipcRenderer.invoke('office:dispatch',request),
+  dispatchOfficeTask: (request:{repo:'FE'|'BE';prompt:string;readOnly?:boolean;role?:'frontend'|'backend'|'architect'|'qa'|'reviewer'|'integration';featureId?:string;baseRef?:string;continueFrom?:string;edit?:{file:string;old:string;new:string;dryRun?:boolean}}):Promise<{ok:boolean;error?:string;run?:{id:string;cwd:string;branch:string}}> => ipcRenderer.invoke('office:dispatch',request),
   officePreferences: ():Promise<{ok:boolean;defaults?:Record<string,OfficeDefaults>;error?:string}> => ipcRenderer.invoke('office:preferences'),
   saveOfficePreference: (role:string,value:OfficeDefaults):Promise<{ok:boolean;defaults?:Record<string,OfficeDefaults>;error?:string}> => ipcRenderer.invoke('office:savePreference',role,value),
   onOfficeRunChanged: (cb: (run: {id:string;agentId:string;status:string;runtime:string;requestedModel?:string|null;requestedEffort?:string|null;model:string;tokens:number|string;cost:string}) => void): (() => void) => {
@@ -579,7 +584,7 @@ const api = {
     ipcRenderer.on('office:runChanged',listener);
     return () => ipcRenderer.removeListener('office:runChanged',listener);
   },
-  startOfficeTask: (request: {repo:'FE'|'BE';runtime:'claude'|'codex';model?:string;effort?:'low'|'medium'|'high'|'xhigh'|'max';prompt:string;tier?:'XS'|'S'|'M'|'L';featureId?:string;role?:'frontend'|'backend'|'architect'|'qa'|'reviewer'|'integration';baseRef?:string;continueFrom?:string;edit?:{file:string;old:string;new:string;dryRun?:boolean}}): Promise<{ok:boolean;error?:string;run?:{id:string;cwd:string;branch:string}}> => ipcRenderer.invoke('office:start',request),
+  startOfficeTask: (request: {repo:'FE'|'BE';runtime:'claude'|'codex';model?:string;effort?:'low'|'medium'|'high'|'xhigh'|'max';prompt:string;readOnly?:boolean;tier?:'XS'|'S'|'M'|'L';featureId?:string;role?:'frontend'|'backend'|'architect'|'qa'|'reviewer'|'integration';baseRef?:string;continueFrom?:string;edit?:{file:string;old:string;new:string;dryRun?:boolean}}): Promise<{ok:boolean;error?:string;run?:{id:string;cwd:string;branch:string}}> => ipcRenderer.invoke('office:start',request),
   version: __APP_VERSION__,
 
   // ─── Analytics ───────────────────────────────────────────────────────────

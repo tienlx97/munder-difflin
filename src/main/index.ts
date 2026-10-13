@@ -595,6 +595,11 @@ function removeWorkerScratch(workerId: string): void {
 // relaunch carries `noAutoInstall`, so the installer can never fire (let alone loop) a
 // second time — a binary that's somehow still missing just spawns and exits normally.
 const codingOffice = new CodingOffice(hive, ptyManager);
+ipcMain.handle('office:roots', (_evt,values:{FE:string;BE:string})=>{try{codingOffice.saveRoots(values);return {ok:true};}catch(e){return {ok:false,error:String(e)};}});
+ipcMain.handle('office:doctor', ()=>codingOffice.doctor());
+ipcMain.handle('office:runs', () => codingOffice.listRuns());
+ipcMain.handle('office:verify', async (evt,id:string) => {try{const run=await codingOffice.verify(id);if(!evt.sender.isDestroyed())evt.sender.send('office:runChanged',run);return {ok:true,run};}catch(e){return {ok:false,error:String(e)};}});
+ipcMain.handle('office:accept', (evt,id:string) => {try{const run=codingOffice.accept(id);evt.sender.send('office:runChanged',run);return {ok:true,run};}catch(e){return {ok:false,error:String(e)};}});
 ipcMain.handle('office:preferences', () => {try{return {ok:true,defaults:codingOffice.preferences()};}catch(e){return {ok:false,error:String(e)};}});
 ipcMain.handle('office:savePreference', (_evt, role:string, value:Parameters<CodingOffice['savePreference']>[1]) => {try{return {ok:true,defaults:codingOffice.savePreference(role,value)};}catch(e){return {ok:false,error:String(e)};}});
 ipcMain.handle('office:saveTeam', (_evt, values:Parameters<CodingOffice['saveTeam']>[0]) => {try{return {ok:true,defaults:codingOffice.saveTeam(values)};}catch(e){return {ok:false,error:String(e)};}});

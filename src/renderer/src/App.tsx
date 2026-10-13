@@ -350,7 +350,7 @@ export function App() {
             (sidebar detail, god Command Center, fullscreen) carries it. */}
         <button
           className="cth-titlebar-nodrag cth-settings-btn cth-tip"
-          onClick={() => { setSettingsSection(undefined); setSettingsOpen(true); }}
+          onClick={() => { if(config.codingOffice){window.dispatchEvent(new Event('office:configure'));return;}setSettingsSection(undefined); setSettingsOpen(true); }}
           data-tip="Settings"
           aria-label="Settings"
           style={{
